@@ -368,16 +368,55 @@ export function useWebRTC({ localStream, onSpeakingChange }: UseWebRTCProps) {
     }
   }, [localStream]);
 
-  // Unlock all audio elements
+  // Master AudioContext reference for guaranteed WebAudio routing on strict browsers (Brave / Safari)
+  const masterAudioContextRef = useRef<AudioContext | null>(null);
+
+  // Get or initialize Master AudioContext
+  const getMasterAudioContext = useCallback(() => {
+    if (!masterAudioContextRef.current || masterAudioContextRef.current.state === 'closed') {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        masterAudioContextRef.current = new AudioCtx();
+      }
+    }
+    return masterAudioContextRef.current;
+  }, []);
+
+  // Unlock all audio elements and resume WebAudio context on user gesture (Brave Shield proof)
   const unlockAllAudio = useCallback(() => {
-    const audioElements = document.querySelectorAll('audio[id^="remote-audio-"], video');
-    audioElements.forEach((el) => {
+    // 1. Resume AudioContext
+    const ctx = getMasterAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch((err) => console.warn('[WebRTC] AudioContext resume error:', err));
+    }
+
+    // 2. Play all audio & video elements
+    const mediaElements = document.querySelectorAll('audio[id^="remote-audio-"], video');
+    mediaElements.forEach((el) => {
       const mediaEl = el as HTMLMediaElement;
       mediaEl.play().catch((err) => {
-        console.warn('[WebRTC] Unlock audio element play() error:', err);
+        console.warn('[WebRTC] Unlock media element play() error:', err);
       });
     });
-  }, []);
+  }, [getMasterAudioContext]);
+
+  // Global listener: Auto-unlock audio on the very first user interaction anywhere in the window
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      unlockAllAudio();
+    };
+
+    window.addEventListener('pointerdown', handleFirstInteraction, { passive: true });
+    window.addEventListener('keydown', handleFirstInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+      if (masterAudioContextRef.current) {
+        masterAudioContextRef.current.close().catch(() => {});
+      }
+    };
+  }, [unlockAllAudio]);
 
   // Flush queued ICE candidates
   const flushIceCandidates = useCallback(async (peerId: string, pc: RTCPeerConnection) => {
@@ -394,7 +433,7 @@ export function useWebRTC({ localStream, onSpeakingChange }: UseWebRTCProps) {
     iceCandidateQueuesRef.current.delete(peerId);
   }, []);
 
-  // Play remote audio
+  // Play remote audio with Dual-Route (HTMLAudioElement + WebAudio Fallback for Brave)
   const playRemoteAudio = useCallback(
     (peerId: string, stream: MediaStream) => {
       let audioEl = document.getElementById(`remote-audio-${peerId}`) as HTMLAudioElement | null;
@@ -410,63 +449,92 @@ export function useWebRTC({ localStream, onSpeakingChange }: UseWebRTCProps) {
         audioEl.srcObject = stream;
       }
 
+      // Hook onunmute on all tracks so audio immediately starts when RTP packets arrive
+      stream.getAudioTracks().forEach((track) => {
+        track.onunmute = () => {
+          console.log(`[WebRTC] 🔊 Audio track unmuted for ${peerId}, triggering play()`);
+          audioEl?.play().catch(() => {});
+        };
+      });
+
       // Apply output device sinkId if supported
       const mediaEl = audioEl as HTMLMediaElement & { setSinkId?: (sinkId: string) => Promise<void> };
       if (typeof mediaEl.setSinkId === 'function' && currentOutputDeviceId && currentOutputDeviceId !== 'default') {
         mediaEl.setSinkId(currentOutputDeviceId).catch(() => {});
       }
 
-      audioEl.play()
-        .then(() => {
-          updatePeerState(peerId, { isAudioPlaying: true, audioTrackCount: stream.getAudioTracks().length });
-        })
-        .catch((err) => {
-          console.warn(`[WebRTC] Autoplay prevented for ${peerId}:`, err);
-          updatePeerState(peerId, { isAudioPlaying: false, audioTrackCount: stream.getAudioTracks().length });
-        });
+      const tryPlay = () => {
+        if (!audioEl) return;
+        audioEl.play()
+          .then(() => {
+            updatePeerState(peerId, { isAudioPlaying: true, audioTrackCount: stream.getAudioTracks().length });
+          })
+          .catch((err) => {
+            console.warn(`[WebRTC] HTMLAudio play prevented for ${peerId} (Brave/Policy):`, err);
+            updatePeerState(peerId, { isAudioPlaying: false, audioTrackCount: stream.getAudioTracks().length });
+
+            // WebAudio destination fallback for Brave
+            try {
+              const ctx = getMasterAudioContext();
+              if (ctx) {
+                const source = ctx.createMediaStreamSource(stream);
+                source.connect(ctx.destination);
+                ctx.resume().then(() => {
+                  updatePeerState(peerId, { isAudioPlaying: true, audioTrackCount: stream.getAudioTracks().length });
+                }).catch(() => {});
+              }
+            } catch (fallbackErr) {
+              console.warn('[WebRTC] WebAudio routing fallback error:', fallbackErr);
+            }
+          });
+      };
+
+      tryPlay();
 
       // Voice Activity Detection (VAD)
       try {
-        const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
+        const audioCtx = getMasterAudioContext();
+        if (audioCtx) {
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
 
-        const timeData = new Uint8Array(analyser.fftSize);
-        let wasSpeaking = false;
-        let speechTimeout: NodeJS.Timeout | null = null;
+          const timeData = new Uint8Array(analyser.fftSize);
+          let wasSpeaking = false;
+          let speechTimeout: NodeJS.Timeout | null = null;
 
-        const vadInterval = setInterval(() => {
-          if (audioCtx.state === 'closed') {
-            clearInterval(vadInterval);
-            return;
-          }
-          analyser.getByteTimeDomainData(timeData);
-          let sum = 0;
-          for (let i = 0; i < timeData.length; i++) {
-            sum += Math.abs(timeData[i] - 128);
-          }
-          const volume = sum / timeData.length;
-          const isSpeakingNow = volume > 3.0;
-
-          if (isSpeakingNow) {
-            if (speechTimeout) clearTimeout(speechTimeout);
-            if (!wasSpeaking) {
-              wasSpeaking = true;
-              onSpeakingChange?.(peerId, true);
+          const vadInterval = setInterval(() => {
+            if (audioCtx.state === 'closed') {
+              clearInterval(vadInterval);
+              return;
             }
-            speechTimeout = setTimeout(() => {
-              wasSpeaking = false;
-              onSpeakingChange?.(peerId, false);
-            }, 400);
-          }
-        }, 100);
+            analyser.getByteTimeDomainData(timeData);
+            let sum = 0;
+            for (let i = 0; i < timeData.length; i++) {
+              sum += Math.abs(timeData[i] - 128);
+            }
+            const volume = sum / timeData.length;
+            const isSpeakingNow = volume > 3.0;
+
+            if (isSpeakingNow) {
+              if (speechTimeout) clearTimeout(speechTimeout);
+              if (!wasSpeaking) {
+                wasSpeaking = true;
+                onSpeakingChange?.(peerId, true);
+              }
+              speechTimeout = setTimeout(() => {
+                wasSpeaking = false;
+                onSpeakingChange?.(peerId, false);
+              }, 400);
+            }
+          }, 100);
+        }
       } catch (vadErr) {
         console.warn(`[WebRTC] Remote VAD error for ${peerId}:`, vadErr);
       }
     },
-    [onSpeakingChange, updatePeerState, currentOutputDeviceId]
+    [onSpeakingChange, updatePeerState, currentOutputDeviceId, getMasterAudioContext]
   );
 
   // Create peer connection for a specific peer
