@@ -1,0 +1,22 @@
+.shiny-text {
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.45) 40%,
+    rgba(255, 255, 255, 1) 50%,
+    rgba(255, 255, 255, 0.45) 60%
+  );
+  background-size: calc(var(--shimmer-width, 100px) + 100%) 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shiny-text-slide var(--speed, 3s) ease-in-out infinite;
+}
+
+@keyframes shiny-text-slide {
+  0% {
+    background-position: 100% center;
+  }
+  100% {
+    background-position: -100% center;
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "RIVO — Comunicação em Tempo Real",
+  "short_name": "RIVO",
+  "description": "Plataforma moderna de voz, vídeo e compartilhamento em tempo real.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080810",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

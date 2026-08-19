@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Allow tunneling services (localtunnel, ngrok, cloudflare) in development
+  allowedDevOrigins: [
+    '*.loca.lt',
+    '*.ngrok-free.app',
+    '*.ngrok.app',
+    '*.ngrok.io',
+    '*.trycloudflare.com',
+    'localhost:3000',
+  ],
 };
 
 export default nextConfig;

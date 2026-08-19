@@ -1,0 +1,448 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRoom } from '@/hooks/useRoom';
+import { RoomHeader } from './RoomHeader';
+import { ParticipantGrid } from './ParticipantGrid';
+import { VoiceControls } from './VoiceControls';
+import { ScreenShareStage } from './ScreenShareStage';
+import { AudioSettingsModal } from './AudioSettingsModal';
+import { RoomSidebar } from './RoomSidebar';
+import { RightParticipantSidebar } from './RightParticipantSidebar';
+import { Aurora } from '@/components/effects/Aurora';
+import { Button } from '@/components/ui/Button';
+import type { RoomInfo } from '@/types';
+
+interface RoomViewProps {
+  roomInfo: RoomInfo;
+  nickname: string;
+  initialDeviceId?: string;
+  initialStream?: MediaStream;
+  onLeave: () => void;
+}
+
+export function RoomView({ roomInfo, nickname, initialDeviceId, initialStream, onLeave }: RoomViewProps) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDiagOpen, setIsDiagOpen] = useState(false);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+
+  // Set right sidebar open by default only on desktop
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      setIsRightSidebarOpen(true);
+    }
+  }, []);
+
+  const {
+    isJoined,
+    isJoining,
+    joinStep,
+    isMuted,
+    error,
+    participants,
+    localParticipant,
+    localStream,
+    currentDeviceId,
+    peerStates,
+    unlockAllAudio,
+    screenStream,
+    isSharingScreen,
+    remoteScreenStreams,
+    startScreenShare,
+    stopScreenShare,
+    cameraStream,
+    isCameraOn,
+    remoteCameraStreams,
+    startCamera,
+    stopCamera,
+    reconnectPeer,
+    joinRoom,
+    leaveRoom,
+    toggleMute,
+    changeMicrophoneDevice,
+    currentOutputDeviceId,
+    changeAudioOutputDevice,
+  } = useRoom({ roomInfo, nickname, initialDeviceId, initialStream });
+
+  const handleLeave = () => {
+    leaveRoom();
+    onLeave();
+  };
+
+  // Collect all active screen share streams (Local + All Remote Streams)
+  interface ActiveScreenItem {
+    id: string;
+    stream: MediaStream;
+    label: string;
+    isLocal: boolean;
+  }
+
+  const activeScreens: ActiveScreenItem[] = [];
+
+  if (isSharingScreen && screenStream) {
+    activeScreens.push({
+      id: 'local-screen-share',
+      stream: screenStream,
+      label: `${nickname} (Sua Transmissão)`,
+      isLocal: true,
+    });
+  }
+
+  Object.entries(remoteScreenStreams).forEach(([peerId, stream]) => {
+    const sharer = participants.find((p) => p.peerId === peerId);
+    activeScreens.push({
+      id: peerId,
+      stream,
+      label: `Tela de ${sharer?.nickname || 'Participante'}`,
+      isLocal: false,
+    });
+  });
+
+  // Check if any connected remote participant has audio blocked by browser autoplay policy
+  const hasBlockedAudio = participants.some((p) => {
+    const st = peerStates[p.peerId];
+    return st && st.audioTrackCount > 0 && !st.isAudioPlaying;
+  });
+
+  // Joining state
+  if (!isJoined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-[#080810] relative overflow-hidden">
+        <Aurora colors={['#5b21b6', '#7c3aed', '#4f46e5']} speed={0.5} blur={90} opacity={0.2} />
+
+        <div className="text-center max-w-md w-full relative z-10 animate-fade-in-up">
+          {error ? (
+            <div className="p-8 bg-[#12121e]/90 border border-red-500/20 rounded-3xl backdrop-blur-2xl shadow-2xl space-y-5">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-8 h-8 text-red-400"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white mb-1">Erro de Conexão</h2>
+                <p className="text-white/50 text-sm">{error}</p>
+              </div>
+              <div className="flex gap-3 justify-center pt-2">
+                <Button variant="primary" onClick={joinRoom} className="flex-1">
+                  Tentar Novamente
+                </Button>
+                <Button variant="secondary" onClick={onLeave} className="flex-1">
+                  Voltar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-8 bg-[#12121e]/90 border border-white/[0.08] rounded-3xl backdrop-blur-2xl shadow-2xl space-y-6">
+              <div className="relative inline-block">
+                <div className="absolute inset-0 bg-violet-500/25 rounded-3xl blur-xl animate-pulse-slow" />
+                <div className="relative w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-violet-600/40">
+                  {isJoining ? (
+                    <div className="w-9 h-9 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="w-10 h-10 text-white drop-shadow-md"
+                    >
+                      <path d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
+                      <path d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
+                  {isJoining ? 'Conectando à sala...' : `Entrar em ${roomInfo.name}`}
+                </h2>
+                <p className="text-violet-300/80 font-medium text-sm">
+                  {isJoining
+                    ? (joinStep || 'Configurando WebRTC e áudio de alta fidelidade...')
+                    : 'Pronto para entrar na sala de voz'}
+                </p>
+              </div>
+
+              {!isJoining && (
+                <Button variant="primary" size="lg" onClick={joinRoom} className="w-full py-3.5 text-base font-semibold shadow-lg shadow-violet-600/30">
+                  Entrar no Canal de Voz
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Main Discord-Style Room Layout
+  return (
+    <div className="min-h-screen flex bg-[#080810] text-white overflow-hidden relative">
+      {/* 1. Left Discord Sidebar (Desktop Fixed) */}
+      <div className="hidden lg:block h-screen shrink-0">
+        <RoomSidebar
+          roomName={roomInfo.name}
+          nickname={nickname}
+          isMuted={isMuted}
+          onToggleMute={toggleMute}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          localParticipant={localParticipant}
+          participants={participants}
+        />
+      </div>
+
+      {/* 2. Left Discord Sidebar (Mobile Slide-out Drawer) */}
+      {isLeftSidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsLeftSidebarOpen(false)}
+          />
+          <div className="relative z-10 animate-in slide-in-from-left duration-200 shadow-2xl h-full">
+            <RoomSidebar
+              roomName={roomInfo.name}
+              nickname={nickname}
+              isMuted={isMuted}
+              onToggleMute={toggleMute}
+              onOpenSettings={() => {
+                setIsLeftSidebarOpen(false);
+                setIsSettingsOpen(true);
+              }}
+              localParticipant={localParticipant}
+              participants={participants}
+              onClose={() => setIsLeftSidebarOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 3. Center Main Stage Area */}
+      <main className="flex-1 flex flex-col min-w-0 h-screen bg-[#080810] relative">
+        <RoomHeader
+          roomName={roomInfo.name}
+          roomCode={roomInfo.code}
+          participantCount={(localParticipant ? 1 : 0) + participants.length}
+          onOpenDiagnostics={() => setIsDiagOpen(true)}
+          onToggleLeftSidebar={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
+          onToggleRightSidebar={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+        />
+
+        {/* Autoplay Warning Banner */}
+        {hasBlockedAudio && (
+          <div
+            onClick={unlockAllAudio}
+            className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-b border-amber-500/30 px-3 sm:px-4 py-2.5 text-amber-200 text-xs font-semibold flex items-center justify-between cursor-pointer hover:bg-amber-500/30 transition-all shrink-0 z-10"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-base animate-bounce">🔊</span>
+              <span className="truncate">Áudio bloqueado pelo navegador. <strong>Clique para desbloquear e ouvir!</strong></span>
+            </div>
+            <button className="px-3 py-1 bg-amber-500/30 hover:bg-amber-500/50 text-white rounded-xl text-xs font-bold shrink-0 ml-2 shadow-sm">
+              Ativar Som
+            </button>
+          </div>
+        )}
+
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col p-2 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto min-h-0">
+          {/* Active Screen Share Theater Stage (Multi-Stream Grid) */}
+          {activeScreens.length > 0 && (
+            <div className="w-full shrink-0 animate-fade-in-up">
+              <div
+                className={`grid gap-2 sm:gap-4 w-full ${
+                  activeScreens.length === 1
+                    ? 'grid-cols-1 max-w-5xl mx-auto'
+                    : activeScreens.length === 2
+                    ? 'grid-cols-1 lg:grid-cols-2'
+                    : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+                }`}
+              >
+                {activeScreens.map((screen) => (
+                  <ScreenShareStage
+                    key={screen.id}
+                    stream={screen.stream}
+                    muted={screen.isLocal}
+                    label={screen.label}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Voice Participants Grid Stage */}
+          <div className="flex-1 flex items-center justify-center min-h-[200px] sm:min-h-[250px]">
+            <ParticipantGrid
+              participants={participants}
+              localParticipant={localParticipant}
+              localCameraStream={cameraStream}
+              remoteCameraStreams={remoteCameraStreams}
+            />
+          </div>
+        </div>
+
+        {/* Floating Voice Controls Bar */}
+        <VoiceControls
+          isMuted={isMuted}
+          onToggleMute={toggleMute}
+          isCameraOn={isCameraOn}
+          onToggleCamera={isCameraOn ? stopCamera : startCamera}
+          isSharingScreen={isSharingScreen}
+          onToggleScreenShare={isSharingScreen ? stopScreenShare : startScreenShare}
+          onLeave={handleLeave}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+      </main>
+
+      {/* 4. Right Participant Sidebar (Desktop Fixed) */}
+      {isRightSidebarOpen && (
+        <div className="hidden lg:block h-screen shrink-0">
+          <RightParticipantSidebar
+            participants={participants}
+            localParticipant={localParticipant}
+            onClose={() => setIsRightSidebarOpen(false)}
+          />
+        </div>
+      )}
+
+      {/* 5. Right Participant Sidebar (Mobile Slide-out Drawer) */}
+      {isRightSidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex justify-end">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsRightSidebarOpen(false)}
+          />
+          <div className="relative z-10 animate-in slide-in-from-right duration-200 shadow-2xl h-full">
+            <RightParticipantSidebar
+              participants={participants}
+              localParticipant={localParticipant}
+              onClose={() => setIsRightSidebarOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Audio Settings Modal */}
+      <AudioSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        currentDeviceId={currentDeviceId}
+        onSelectDevice={changeMicrophoneDevice}
+        currentOutputDeviceId={currentOutputDeviceId}
+        onSelectOutputDevice={changeAudioOutputDevice}
+        localStream={localStream}
+      />
+
+      {/* Real-time Diagnostics Modal */}
+      {isDiagOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg p-6 sm:p-7 bg-[#12121e]/95 border border-white/[0.08] rounded-3xl shadow-2xl shadow-black/80 space-y-5 text-left">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 flex items-center justify-center">
+                  🔍
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Diagnóstico de Voz & Rede</h3>
+                  <p className="text-xs text-white/40">Telemetria WebRTC em tempo real</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDiagOpen(false)}
+                className="text-white/40 hover:text-white p-2 rounded-xl hover:bg-white/[0.06] transition-colors cursor-pointer active:scale-90"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {/* Local status */}
+              <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/[0.05] space-y-1.5">
+                <p className="text-xs font-bold text-violet-400 tracking-wide uppercase">Seu Microfone</p>
+                <p className="text-xs text-white/80">Status: {isMuted ? '🔇 Mutado' : '🎙️ Transmitindo'}</p>
+                <p className="text-xs text-white/60">
+                  Faixa de Áudio Local: {localStream?.getAudioTracks().length ? '🟢 Capturando Som' : '🔴 Sem Captura'}
+                </p>
+              </div>
+
+              {/* Remote Participants WebRTC Diagnostic */}
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-violet-400 tracking-wide uppercase">Participantes ({participants.length})</p>
+
+                {participants.length === 0 ? (
+                  <p className="text-xs text-white/40 italic p-3 bg-white/[0.02] rounded-xl text-center">Nenhum outro participante conectado ainda.</p>
+                ) : (
+                  participants.map((p) => {
+                    const st = peerStates[p.peerId] || {
+                      iceState: 'connecting',
+                      connState: 'connecting',
+                      isAudioPlaying: false,
+                      audioTrackCount: 0,
+                    };
+
+                    const iceOk = st.iceState === 'connected' || st.iceState === 'completed';
+
+                    return (
+                      <div key={p.peerId} className="bg-white/[0.02] p-4 rounded-2xl space-y-3 border border-white/[0.05]">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-white">{p.nickname}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md font-mono font-bold ${iceOk ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                            {iceOk ? '🟢 WebRTC Conectado' : `🟡 ICE: ${st.iceState || 'Handshake'}`}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs text-white/60 bg-[#0a0a14] p-2.5 rounded-xl">
+                          <div>Áudio Recebido: <strong className="text-white">{st.audioTrackCount > 0 ? '🟢 1 Faixa' : '🔴 Aguardando'}</strong></div>
+                          <div>Saída de Som: <strong className={st.isAudioPlaying ? 'text-emerald-400' : 'text-amber-400'}>{st.isAudioPlaying ? '🔊 Ativo' : '🔇 Pausado'}</strong></div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          {!st.isAudioPlaying && (
+                            <button
+                              onClick={() => unlockAllAudio()}
+                              className="flex-1 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-violet-600/30 active:scale-95"
+                            >
+                              🔊 Forçar Áudio
+                            </button>
+                          )}
+                          {!iceOk && (
+                            <button
+                              onClick={() => reconnectPeer(p.peerId)}
+                              className="flex-1 py-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-amber-600/30 active:scale-95"
+                            >
+                              🔄 Reconectar Rede
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-2 border-t border-white/[0.06]">
+              <Button variant="primary" onClick={() => unlockAllAudio()} className="flex-1 text-xs font-bold py-2.5">
+                🔊 Desbloquear Todo Áudio
+              </Button>
+              <Button variant="secondary" onClick={() => setIsDiagOpen(false)} className="text-xs font-bold py-2.5">
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

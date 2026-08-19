@@ -1,0 +1,50 @@
+.glow-card {
+  position: relative;
+  border-radius: 1.5rem;
+  overflow: hidden;
+}
+
+.glow-card-border {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--glow-angle, 0deg),
+    transparent 0%,
+    var(--glow-color, rgba(124, 58, 237, 0.4)) 10%,
+    transparent 20%,
+    transparent 50%,
+    var(--glow-color, rgba(124, 58, 237, 0.4)) 60%,
+    transparent 70%
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  animation: glow-rotate 4s linear infinite;
+  pointer-events: none;
+}
+
+.glow-card-content {
+  position: relative;
+  z-index: 1;
+  background: rgba(18, 18, 28, 0.85);
+  backdrop-filter: blur(24px);
+  border-radius: inherit;
+  height: 100%;
+}
+
+@property --glow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes glow-rotate {
+  0% {
+    --glow-angle: 0deg;
+  }
+  100% {
+    --glow-angle: 360deg;
+  }
+}
