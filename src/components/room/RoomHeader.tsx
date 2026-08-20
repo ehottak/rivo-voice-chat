@@ -1,7 +1,5 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-
 interface RoomHeaderProps {
   roomName: string;
   roomCode: string;
@@ -9,36 +7,21 @@ interface RoomHeaderProps {
   onOpenDiagnostics?: () => void;
   onToggleLeftSidebar?: () => void;
   onToggleRightSidebar?: () => void;
+  onToggleChat?: () => void;
+  isChatOpen?: boolean;
+  onOpenInvite: () => void;
 }
 
 export function RoomHeader({
   roomName,
-  roomCode,
   participantCount,
   onOpenDiagnostics,
   onToggleLeftSidebar,
   onToggleRightSidebar,
+  onToggleChat,
+  isChatOpen,
+  onOpenInvite,
 }: RoomHeaderProps) {
-  const [copied, setCopied] = useState(false);
-
-  const copyLink = useCallback(async () => {
-    const url = `${window.location.origin}/room/${roomCode}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const input = document.createElement('input');
-      input.value = url;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [roomCode]);
-
   return (
     <header className="h-[52px] px-3 sm:px-5 bg-zinc-900/80 backdrop-blur-xl border-b border-white/[0.06] flex items-center justify-between shrink-0 select-none z-20">
       {/* Left: Mobile Menu Trigger + Channel Info */}
@@ -68,7 +51,7 @@ export function RoomHeader({
         </div>
 
         <div className="min-w-0">
-          <h1 className="text-[13px] sm:text-sm font-bold text-white tracking-wide truncate max-w-[140px] sm:max-w-xs md:max-w-md">
+          <h1 className="text-[13px] sm:text-sm font-bold text-white tracking-wide truncate max-w-[130px] sm:max-w-xs md:max-w-md">
             {roomName || 'Sala de Voz'}
           </h1>
           <div className="flex items-center gap-1.5">
@@ -85,27 +68,35 @@ export function RoomHeader({
 
       {/* Right: Actions Bar */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {/* Share Link Button */}
-        <button
-          onClick={copyLink}
-          className={`group flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95 ${
-            copied
-              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
-              : 'bg-white/[0.04] hover:bg-violet-500/15 text-white/60 hover:text-violet-300 border border-white/[0.06] hover:border-violet-500/30'
-          }`}
-          title="Compartilhar Link da Sala"
-        >
-          {copied ? (
+        {/* Toggle Chat Button */}
+        {onToggleChat && (
+          <button
+            onClick={onToggleChat}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95 ${
+              isChatOpen
+                ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30 border border-violet-500'
+                : 'bg-white/[0.04] hover:bg-white/[0.08] text-white/60 hover:text-white border border-white/[0.06]'
+            }`}
+            title={isChatOpen ? 'Fechar Chat' : 'Abrir Chat da Sala'}
+          >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-              <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902 1.168.188 2.352.327 3.55.414v3.025c0 .421.49.664.819.4l3.16-2.529c.77-.072 1.53-.175 2.271-.308 1.437-.232 2.43-1.49 2.43-2.902V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0010 2zm0 7a1 1 0 100-2 1 1 0 000 2zM6 9a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
             </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform">
-              <path d="M12.232 4.232a2.5 2.5 0 013.536 3.536l-1.225 1.224a.75.75 0 001.061 1.06l1.224-1.224a4 4 0 00-5.656-5.656l-3 3a4 4 0 00.225 5.865.75.75 0 00.977-1.138 2.5 2.5 0 01-.142-3.667l3-3z" />
-              <path d="M11.603 7.963a.75.75 0 00-.977 1.138 2.5 2.5 0 01.142 3.667l-3 3a2.5 2.5 0 01-3.536-3.536l1.225-1.224a.75.75 0 00-1.061-1.06l-1.224 1.224a4 4 0 105.656 5.656l3-3a4 4 0 00-.225-5.865z" />
-            </svg>
-          )}
-          <span className="hidden sm:inline">{copied ? 'Copiado!' : 'Convite'}</span>
+            <span className="hidden sm:inline">Chat</span>
+          </button>
+        )}
+
+        {/* Share / Invite Modal Trigger */}
+        <button
+          onClick={onOpenInvite}
+          className="group flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/[0.04] hover:bg-violet-500/15 text-white/60 hover:text-violet-300 border border-white/[0.06] hover:border-violet-500/30 transition-all cursor-pointer active:scale-95"
+          title="Convidar Amigos para a Sala"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform">
+            <path d="M12.232 4.232a2.5 2.5 0 013.536 3.536l-1.225 1.224a.75.75 0 001.061 1.06l1.224-1.224a4 4 0 00-5.656-5.656l-3 3a4 4 0 00.225 5.865.75.75 0 00.977-1.138 2.5 2.5 0 01-.142-3.667l3-3z" />
+            <path d="M11.603 7.963a.75.75 0 00-.977 1.138 2.5 2.5 0 01.142 3.667l-3 3a2.5 2.5 0 01-3.536-3.536l1.225-1.224a.75.75 0 00-1.061-1.06l-1.224 1.224a4 4 0 105.656 5.656l3-3a4 4 0 00-.225-5.865z" />
+          </svg>
+          <span className="hidden sm:inline">Convite</span>
         </button>
 
         {/* Diagnostics Button */}

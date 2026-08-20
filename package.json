@@ -1,16 +1,35 @@
 {
-  "name": "voice-chat-app",
-  "version": "0.1.0",
+  "name": "rivo",
+  "version": "1.0.0",
   "private": true,
+  "description": "RIVO — Plataforma de Comunicação e Comunidades em Tempo Real",
+  "main": "electron-main.cjs",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "next build",
-    "start": "cross-env NODE_ENV=production tsx server.ts",
-    "lint": "eslint",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "build:server": "esbuild server.ts --bundle --platform=node --target=node20 --outfile=server.cjs --external:next --external:socket.io --external:@prisma/client --external:pg",
+    "build": "next build && npm run build:server",
+    "start": "node server.cjs",
+    "desktop": "electron electron-main.cjs",
+    "make:exe": "npm run build && electron-builder --win dir"
+  },
+  "build": {
+    "appId": "com.rivo.app",
+    "productName": "RIVO",
+    "asar": false,
+    "directories": {
+      "output": "dist-release-v2"
+    },
+    "win": {
+      "target": "dir",
+      "icon": "public/icon.ico"
+    },
+    "files": [
+      "server.cjs",
+      "electron-main.cjs",
+      ".next/**/*",
+      "public/**/*",
+      "package.json"
+    ]
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
@@ -29,9 +48,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^40.8.0",
+    "electron-builder": "^26.0.2",
+    "esbuild": "^0.25.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "prisma": "^7.9.1",
+    "sharp": "^0.33.5",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "^5"

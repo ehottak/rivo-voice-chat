@@ -5,6 +5,7 @@ import { useSocket } from './useSocket';
 import { useParticipants } from './useParticipants';
 import { useWebRTC } from './useWebRTC';
 import { getSocket } from '@/lib/socket';
+import { soundEffects } from '@/lib/sound-effects';
 import type { Participant, RoomInfo, ParticipantInfo } from '@/types';
 
 import type { PeerConnectionState } from './useWebRTC';
@@ -21,6 +22,7 @@ interface UseRoomReturn {
   isJoining: boolean;
   joinStep: string;
   isMuted: boolean;
+  isDeafened: boolean;
   error: string | null;
   participants: Participant[];
   localParticipant: Participant | null;
@@ -42,6 +44,7 @@ interface UseRoomReturn {
   joinRoom: () => Promise<void>;
   leaveRoom: () => void;
   toggleMute: () => void;
+  toggleDeafen: () => void;
   changeMicrophoneDevice: (deviceId: string) => Promise<void>;
   currentOutputDeviceId: string;
   changeAudioOutputDevice: (deviceId: string) => Promise<void>;
@@ -52,6 +55,7 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
   const [isJoining, setIsJoining] = useState(false);
   const [joinStep, setJoinStep] = useState<string>('');
   const [isMuted, setIsMuted] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [localParticipant, setLocalParticipant] = useState<Participant | null>(null);
@@ -100,30 +104,53 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
     const sock = getSocket();
 
     const handleLeft = (data: { peerId: string }) => {
+      soundEffects.playUserLeft();
       closePeerConnection(data.peerId);
     };
 
     const handleJoined = (data: { id?: string; peerId: string; userId?: string; nickname: string; isMuted?: boolean }) => {
-      console.log(`[useRoom] Participant joined: ${data.nickname} (${data.peerId}), instant WebRTC connection...`);
-      initializePeerConnections([
-        {
-          id: data.id || data.peerId,
-          peerId: data.peerId,
-          userId: data.userId || data.peerId,
-          nickname: data.nickname,
-          isMuted: data.isMuted ?? false,
-        },
-      ]);
+      console.log(`[useRoom] Participant joined: ${data.nickname} (${data.peerId}), waiting for incoming offer...`);
+      soundEffects.playUserJoined();
+      setParticipants((prev) => {
+        if (prev.some((p) => p.peerId === data.peerId)) return prev;
+        return [
+          ...prev,
+          {
+            id: data.id || data.peerId,
+            peerId: data.peerId,
+            userId: data.userId || data.peerId,
+            nickname: data.nickname,
+            isMuted: data.isMuted ?? false,
+            isSpeaking: false,
+          },
+        ];
+      });
+    };
+
+    const handleDeafened = (data: { peerId: string }) => {
+      setParticipants((prev) =>
+        prev.map((p) => (p.peerId === data.peerId ? { ...p, isDeafened: true, isMuted: true } : p))
+      );
+    };
+
+    const handleUndeafened = (data: { peerId: string }) => {
+      setParticipants((prev) =>
+        prev.map((p) => (p.peerId === data.peerId ? { ...p, isDeafened: false } : p))
+      );
     };
 
     sock.on('participant:left', handleLeft);
     sock.on('participant:joined', handleJoined);
+    sock.on('participant:deafened', handleDeafened);
+    sock.on('participant:undeafened', handleUndeafened);
 
     return () => {
       sock.off('participant:left', handleLeft);
       sock.off('participant:joined', handleJoined);
+      sock.off('participant:deafened', handleDeafened);
+      sock.off('participant:undeafened', handleUndeafened);
     };
-  }, [closePeerConnection, initializePeerConnections]);
+  }, [closePeerConnection]);
 
   const joinRoom = useCallback(async () => {
     if (isJoining || isJoined) return;
@@ -140,10 +167,14 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
       if (!hasActiveTracks) {
         console.log('[useRoom] 1. Requesting microphone access...');
         try {
+          const savedEcho = typeof localStorage !== 'undefined' ? localStorage.getItem('rivo_echo_cancellation') : null;
+          const savedNoise = typeof localStorage !== 'undefined' ? localStorage.getItem('rivo_noise_suppression') : null;
+          const savedAgc = typeof localStorage !== 'undefined' ? localStorage.getItem('rivo_auto_gain_control') : null;
+
           const audioConstraints: MediaTrackConstraints = {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
+            echoCancellation: savedEcho !== null ? savedEcho === 'true' : true,
+            noiseSuppression: savedNoise !== null ? savedNoise === 'true' : true,
+            autoGainControl: savedAgc !== null ? savedAgc === 'true' : true,
           };
 
           if (currentDeviceId && currentDeviceId !== 'default') {
@@ -264,6 +295,7 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
 
       setIsJoined(true);
       setJoinStep('');
+      soundEffects.playJoinRoom();
     } catch (err) {
       console.error('[useRoom] Join error:', err);
       setError(err instanceof Error ? err.message : 'Falha ao conectar na sala');
@@ -290,6 +322,8 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
   }, [nickname, isJoined, isJoining, joinRoom]);
 
   const leaveRoom = useCallback(() => {
+    soundEffects.playLeaveRoom();
+
     const sock = getSocket();
     if (sock.connected) {
       sock.emit('room:leave');
@@ -325,6 +359,13 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
     audioTrack.enabled = !newMuted;
     setIsMuted(newMuted);
 
+    // Audio cue for mute/unmute
+    if (newMuted) {
+      soundEffects.playMute();
+    } else {
+      soundEffects.playUnmute();
+    }
+
     // Update local participant
     setLocalParticipant((prev) =>
       prev ? { ...prev, isMuted: newMuted } : null
@@ -337,6 +378,46 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
     }
   }, [isMuted]);
 
+  const toggleDeafen = useCallback(() => {
+    const newDeafened = !isDeafened;
+    setIsDeafened(newDeafened);
+
+    // 1. Mute/Unmute all remote audio elements in DOM
+    const audioEls = document.querySelectorAll('audio[id^="remote-audio-"], video');
+    audioEls.forEach((el) => {
+      (el as HTMLMediaElement).muted = newDeafened;
+    });
+
+    // 2. When deafening, automatically mute mic; when undeafening, restore mic
+    if (newDeafened) {
+      if (localStreamRef.current) {
+        const audioTrack = localStreamRef.current.getAudioTracks()[0];
+        if (audioTrack) audioTrack.enabled = false;
+      }
+      setIsMuted(true);
+      soundEffects.playDeafen();
+    } else {
+      if (localStreamRef.current) {
+        const audioTrack = localStreamRef.current.getAudioTracks()[0];
+        if (audioTrack) audioTrack.enabled = true;
+      }
+      setIsMuted(false);
+      soundEffects.playUndeafen();
+    }
+
+    // 3. Update local participant state
+    setLocalParticipant((prev) =>
+      prev ? { ...prev, isDeafened: newDeafened, isMuted: newDeafened } : null
+    );
+
+    // 4. Notify peers via socket
+    const sock = getSocket();
+    if (sock.connected) {
+      sock.emit(newDeafened ? 'participant:deafened' : 'participant:undeafened');
+      sock.emit(newDeafened ? 'participant:muted' : 'participant:unmuted');
+    }
+  }, [isDeafened]);
+
   // Switch microphone device dynamically
   const changeMicrophoneDevice = useCallback(
     async (deviceId: string) => {
@@ -345,12 +426,16 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
       if (!localStreamRef.current) return;
 
       try {
+        const savedEcho = typeof localStorage !== 'undefined' ? localStorage.getItem('rivo_echo_cancellation') : null;
+        const savedNoise = typeof localStorage !== 'undefined' ? localStorage.getItem('rivo_noise_suppression') : null;
+        const savedAgc = typeof localStorage !== 'undefined' ? localStorage.getItem('rivo_auto_gain_control') : null;
+
         const newStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             deviceId: { exact: deviceId },
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
+            echoCancellation: savedEcho !== null ? savedEcho === 'true' : true,
+            noiseSuppression: savedNoise !== null ? savedNoise === 'true' : true,
+            autoGainControl: savedAgc !== null ? savedAgc === 'true' : true,
           },
         });
 
@@ -373,7 +458,7 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
     [isMuted, replaceAudioTrack]
   );
 
-  // Local microphone speaking detection (TimeDomain VAD)
+  // Local microphone speaking detection (TimeDomain VAD with Noise Gate calibration)
   useEffect(() => {
     if (!localStream || isMuted || !isJoined) {
       setLocalParticipant((prev) => (prev?.isSpeaking ? { ...prev, isSpeaking: false } : prev));
@@ -410,8 +495,12 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
           sum += Math.abs(timeData[i] - 128);
         }
         const volume = sum / timeData.length;
-        // In silence, volume is 0 ~ 1.5. When speaking, volume is > 3.5.
-        const isSpeakingNow = volume > 3.5;
+
+        // Read dynamic Noise Gate threshold from user settings
+        const savedGate = typeof localStorage !== 'undefined' ? localStorage.getItem('rivo_noise_gate') : null;
+        const gateThreshold = savedGate ? (Number(savedGate) / 100) * 16 : 3.2;
+
+        const isSpeakingNow = volume > Math.max(1.8, gateThreshold);
 
         if (isSpeakingNow) {
           if (speechTimeout) clearTimeout(speechTimeout);
@@ -432,7 +521,7 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
             }
           }, 350);
         }
-      }, 60);
+      }, 100);
     } catch (e) {
       console.warn('Local speaking detection error:', e);
     }
@@ -461,6 +550,7 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
     isJoining,
     joinStep,
     isMuted,
+    isDeafened,
     error,
     participants,
     localParticipant,
@@ -482,6 +572,7 @@ export function useRoom({ roomInfo, nickname, initialDeviceId, initialStream }: 
     joinRoom,
     leaveRoom,
     toggleMute,
+    toggleDeafen,
     changeMicrophoneDevice,
     currentOutputDeviceId,
     changeAudioOutputDevice,

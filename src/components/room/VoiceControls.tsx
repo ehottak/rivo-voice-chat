@@ -3,6 +3,8 @@
 interface VoiceControlsProps {
   isMuted: boolean;
   onToggleMute: () => void;
+  isDeafened?: boolean;
+  onToggleDeafen?: () => void;
   isSharingScreen?: boolean;
   onToggleScreenShare?: () => void;
   isCameraOn?: boolean;
@@ -14,6 +16,8 @@ interface VoiceControlsProps {
 export function VoiceControls({
   isMuted,
   onToggleMute,
+  isDeafened = false,
+  onToggleDeafen,
   isSharingScreen,
   onToggleScreenShare,
   isCameraOn,
@@ -23,11 +27,11 @@ export function VoiceControls({
 }: VoiceControlsProps) {
   return (
     <footer className="py-2 sm:py-3 px-3 sm:px-4 bg-zinc-950/90 backdrop-blur-2xl flex items-center justify-center gap-1 sm:gap-2 border-t border-white/[0.06] shrink-0 z-20 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-      {/* 1. Mute/Unmute */}
+      {/* 1. Mute/Unmute Mic Button */}
       <button
         id="btn-toggle-mute"
         onClick={onToggleMute}
-        className={`group relative flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+        className={`group relative flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer select-none active:scale-95 ${
           isMuted
             ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40'
             : 'bg-white/[0.06] hover:bg-emerald-500/15 text-white/80 hover:text-emerald-300 border border-white/[0.06] hover:border-emerald-500/30'
@@ -47,12 +51,37 @@ export function VoiceControls({
         <span className="hidden sm:inline">{isMuted ? 'Desmutar' : 'Mudo'}</span>
       </button>
 
-      {/* 2. Camera Button */}
+      {/* 2. Deafen / Mute Sound Button (Discord Style) */}
+      {onToggleDeafen && (
+        <button
+          id="btn-toggle-deafen"
+          onClick={onToggleDeafen}
+          className={`group relative flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+            isDeafened
+              ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40'
+              : 'bg-white/[0.06] hover:bg-violet-500/15 text-white/80 hover:text-violet-300 border border-white/[0.06] hover:border-violet-500/30'
+          }`}
+          title={isDeafened ? 'Desensurdecer (Ouvir Áudio)' : 'Ensurdecer (Mutar Todo o Áudio)'}
+        >
+          {isDeafened ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5">
+              <path d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM19.46 16.278A9.012 9.012 0 0021 11.25a9 9 0 00-14.774-6.91l1.107 1.107A7.502 7.502 0 0119.5 11.25c0 1.258-.31 2.443-.855 3.486l.815.815v-.023a2.25 2.25 0 011.79 2.202v.04l-1.79-1.492zM7.054 8.114A7.478 7.478 0 004.5 11.25v2.25a2.25 2.25 0 002.25 2.25h.75a2.25 2.25 0 002.25-2.25v-2.25A2.25 2.25 0 007.5 9h-.446z" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5">
+              <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.5A2.25 2.25 0 002.25 9.75v4.5A2.25 2.25 0 004.5 16.5h1.94l4.5 4.5c.944.945 2.56.276 2.56-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06zM15.932 7.757a.75.75 0 011.061 0 6 6 0 010 8.486.75.75 0 01-1.06-1.06 4.5 4.5 0 000-6.365.75.75 0 010-1.06z" />
+            </svg>
+          )}
+          <span className="hidden sm:inline">{isDeafened ? 'Ensurdecido' : 'Áudio'}</span>
+        </button>
+      )}
+
+      {/* 3. Camera Button */}
       {onToggleCamera && (
         <button
           id="btn-toggle-camera"
           onClick={onToggleCamera}
-          className={`group flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+          className={`group flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer select-none active:scale-95 ${
             isCameraOn
               ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/25 hover:shadow-violet-600/40 border border-violet-400/30'
               : 'bg-white/[0.06] hover:bg-violet-500/15 text-white/80 hover:text-violet-300 border border-white/[0.06] hover:border-violet-500/30'
@@ -66,12 +95,12 @@ export function VoiceControls({
         </button>
       )}
 
-      {/* 3. Screen Share Button */}
+      {/* 4. Screen Share Button */}
       {onToggleScreenShare && (
         <button
           id="btn-toggle-screenshare"
           onClick={onToggleScreenShare}
-          className={`group flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer select-none active:scale-95 ${
+          className={`group flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer select-none active:scale-95 ${
             isSharingScreen
               ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/25 hover:shadow-violet-600/40 border border-violet-400/30'
               : 'bg-white/[0.06] hover:bg-violet-500/15 text-white/80 hover:text-violet-300 border border-white/[0.06] hover:border-violet-500/30'
@@ -88,7 +117,7 @@ export function VoiceControls({
       {/* Divider */}
       <div className="w-px h-6 bg-white/[0.08] mx-0.5 hidden sm:block" />
 
-      {/* 4. Mic Settings Button */}
+      {/* 5. Audio Settings Button */}
       <button
         id="btn-audio-settings"
         onClick={onOpenSettings}
@@ -100,7 +129,7 @@ export function VoiceControls({
         </svg>
       </button>
 
-      {/* 5. Leave Button */}
+      {/* 6. Leave Button */}
       <button
         id="btn-leave-room"
         onClick={onLeave}

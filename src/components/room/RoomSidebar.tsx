@@ -8,10 +8,14 @@ interface RoomSidebarProps {
   nickname: string;
   isMuted: boolean;
   onToggleMute: () => void;
+  isDeafened?: boolean;
+  onToggleDeafen?: () => void;
   onOpenSettings: () => void;
   localParticipant: Participant | null;
   participants: Participant[];
   onClose?: () => void;
+  onToggleChat?: () => void;
+  isChatOpen?: boolean;
 }
 
 export function RoomSidebar({
@@ -19,10 +23,14 @@ export function RoomSidebar({
   nickname,
   isMuted,
   onToggleMute,
+  isDeafened = false,
+  onToggleDeafen,
   onOpenSettings,
   localParticipant,
   participants,
   onClose,
+  onToggleChat,
+  isChatOpen,
 }: RoomSidebarProps) {
   const allParticipants = localParticipant
     ? [localParticipant, ...participants]
@@ -39,7 +47,7 @@ export function RoomSidebar({
             <RivoLogo size={32} className="shrink-0 drop-shadow-md" />
             <div className="min-w-0">
               <span className="block truncate text-sm font-bold text-white/90 tracking-wide">{roomName.toUpperCase() || 'RIVO'}</span>
-              <span className="block text-[10px] text-white/30 font-medium">Servidor de Voz</span>
+              <span className="block text-[10px] text-white/30 font-medium">Servidor RIVO</span>
             </div>
           </div>
 
@@ -56,33 +64,35 @@ export function RoomSidebar({
         </div>
 
         {/* Channels List */}
-        <div className="p-3 space-y-5 overflow-y-auto max-h-[calc(100vh-190px)]">
-          {/* Text Channels Section */}
-          <div className="space-y-1">
-            <p className="px-2 text-[10px] font-bold tracking-[0.12em] text-white/25 uppercase flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 opacity-40">
-                <path d="M3.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A1.75 1.75 0 0115 5.75v8.5A1.75 1.75 0 0113.25 16H2.75A1.75 1.75 0 011 14.25v-8.5C1 4.784 1.784 4 2.75 4H3V2.75A.75.75 0 013.75 2z" />
-              </svg>
-              Canais de Texto
-            </p>
-            <div className="space-y-0.5">
-              <div className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white/25 flex items-center gap-2 cursor-not-allowed hover:bg-white/[0.02] transition-colors">
-                <span className="text-white/20 font-bold">#</span>
-                <span>geral</span>
-              </div>
-              <div className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white/25 flex items-center gap-2 cursor-not-allowed hover:bg-white/[0.02] transition-colors">
-                <span className="text-white/20 font-bold">#</span>
-                <span>avisos</span>
-              </div>
+        <div className="p-3 space-y-4 overflow-y-auto max-h-[calc(100vh-190px)]">
+          {/* Functional Chat Channel */}
+          {onToggleChat && (
+            <div className="space-y-1">
+              <p className="px-2 text-[10px] font-bold tracking-[0.12em] text-white/25 uppercase flex items-center gap-1.5">
+                Canais de Texto
+              </p>
+              <button
+                onClick={onToggleChat}
+                className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
+                  isChatOpen
+                    ? 'bg-violet-600/20 text-violet-300 border border-violet-500/30'
+                    : 'bg-white/[0.02] hover:bg-white/[0.05] text-white/70 hover:text-white border border-transparent'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-violet-400 font-bold">#</span>
+                  <span>Chat da Sala</span>
+                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-white/40">
+                  {isChatOpen ? 'aberto' : 'temporário'}
+                </span>
+              </button>
             </div>
-          </div>
+          )}
 
           {/* Voice Channels Section */}
           <div className="space-y-1">
             <p className="px-2 text-[10px] font-bold tracking-[0.12em] text-white/25 uppercase flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 opacity-40">
-                <path d="M7 4a3 3 0 016 0v4a3 3 0 01-6 0V4z" />
-              </svg>
               Canais de Voz
             </p>
 
@@ -174,7 +184,7 @@ export function RoomSidebar({
                 className={`p-1.5 rounded-lg transition-all cursor-pointer active:scale-90 ${
                   isMuted ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white'
                 }`}
-                title={isMuted ? 'Desmutar' : 'Mutar'}
+                title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
                   {isMuted ? (
@@ -184,6 +194,25 @@ export function RoomSidebar({
                   )}
                 </svg>
               </button>
+              {onToggleDeafen && (
+                <button
+                  onClick={onToggleDeafen}
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer active:scale-90 ${
+                    isDeafened ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white'
+                  }`}
+                  title={isDeafened ? 'Desensurdecer (Ouvir Áudio)' : 'Ensurdecer (Mutar Áudio)'}
+                >
+                  {isDeafened ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                      <path d="M10 3.75a.75.75 0 00-1.264-.546L4.703 7H2.25A1.25 1.25 0 001 8.25v3.5A1.25 1.25 0 002.25 13h2.453l4.033 3.796A.75.75 0 0010 16.25V3.75zM12.923 7.077a.75.75 0 111.06-1.06 6.5 6.5 0 010 8.006.75.75 0 11-1.06-1.06 5 5 0 000-5.886z" />
+                    </svg>
+                  )}
+                </button>
+              )}
               <button
                 onClick={onOpenSettings}
                 className="p-1.5 rounded-lg bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white transition-all cursor-pointer active:scale-90 group"

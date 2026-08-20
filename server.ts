@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { createServer } from 'http';
 import next from 'next';
 import { setupSocketServer } from './src/server/socket/index.js';
-import { prisma } from './src/lib/prisma.js';
+import { roomStore } from './src/server/room-store.js';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || 'localhost';
@@ -12,15 +12,8 @@ const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(async () => {
-  // Initial Cleanup: Clean any orphan records from previous runs
-  try {
-    const deletedParticipants = await prisma.roomParticipant.deleteMany();
-    const deletedUsers = await prisma.user.deleteMany();
-    const deletedRooms = await prisma.room.deleteMany();
-    console.log(`[Database Cleanup] 🧹 Banco limpo na inicialização: ${deletedRooms.count} salas, ${deletedUsers.count} usuários e ${deletedParticipants.count} participantes residuais removidos.`);
-  } catch (err) {
-    console.warn('[Database Cleanup] Aviso ao limpar banco na inicialização:', err);
-  }
+  // Start with clean in-memory state
+  roomStore.clearAll();
 
   const httpServer = createServer(handle);
 
@@ -30,15 +23,14 @@ app.prepare().then(async () => {
   // Periodic cleanup for inactive empty rooms (every 5 minutes)
   const cleanupInterval = setInterval(async () => {
     try {
-      const allRooms = await prisma.room.findMany();
+      const allRooms = roomStore.getAllRooms();
       for (const room of allRooms) {
         const sockets = await io.in(room.code).fetchSockets();
-        // If room is empty and older than 3 minutes, purge it
         const ageMs = Date.now() - new Date(room.createdAt).getTime();
-        if (sockets.length === 0 && ageMs > 3 * 60 * 1000) {
-          console.log(`[Auto-Cleanup Periodic] 🧹 Deletando sala vazia inativa: '${room.code}' (${room.name})`);
-          await prisma.roomParticipant.deleteMany({ where: { roomId: room.id } });
-          await prisma.room.delete({ where: { id: room.id } });
+        // If room is empty and older than 5 minutes, purge from memory
+        if (sockets.length === 0 && ageMs > 5 * 60 * 1000) {
+          console.log(`[Auto-Cleanup Periodic] 🧹 Removendo sala inativa da memória: '${room.code}' (${room.name})`);
+          roomStore.deleteRoom(room.code);
         }
       }
     } catch (e) {
@@ -52,7 +44,7 @@ app.prepare().then(async () => {
   ║   🎙️  RIVO                                ║
   ║   → http://${hostname}:${port}                  ║
   ║   → Socket.IO attached                    ║
-  ║   → Zero-DB-Pollute & Auto-Cleanup ON     ║
+  ║   → 100% In-Memory (Zero Database)        ║
   ║   → Mode: ${dev ? 'development' : 'production '}                  ║
   ╚═══════════════════════════════════════════╝
     `);

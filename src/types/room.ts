@@ -11,5 +11,6 @@ export interface Participant {
   userId: string;     // database user id
   nickname: string;
   isMuted: boolean;
+  isDeafened?: boolean;
   isSpeaking: boolean;
 }

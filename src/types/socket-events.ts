@@ -5,9 +5,10 @@
 export interface ParticipantInfo {
   id: string;         // socket id
   peerId: string;     // socket id used for WebRTC signaling
-  userId: string;     // database user id
+  userId: string;     // ephemeral user id
   nickname: string;
   isMuted: boolean;
+  isDeafened?: boolean;
 }
 
 export interface JoinRoomData {
@@ -40,6 +41,14 @@ export interface VoiceIceCandidate {
   candidate: RTCIceCandidateInit;
 }
 
+export interface ChatMessage {
+  id: string;
+  peerId: string;
+  nickname: string;
+  text: string;
+  timestamp: string;
+}
+
 // ============================================================
 // Server → Client Events
 // ============================================================
@@ -52,12 +61,15 @@ export interface ServerToClientEvents {
   'participant:left': (data: { peerId: string }) => void;
   'participant:muted': (data: { peerId: string }) => void;
   'participant:unmuted': (data: { peerId: string }) => void;
+  'participant:deafened': (data: { peerId: string }) => void;
+  'participant:undeafened': (data: { peerId: string }) => void;
   'participant:speaking': (data: { peerId: string; isSpeaking: boolean }) => void;
 
   // Voice signaling events
   'voice:offer': (data: VoiceOffer) => void;
   'voice:answer': (data: VoiceAnswer) => void;
   'voice:ice-candidate': (data: VoiceIceCandidate) => void;
+  'voice:reconnect-request': (data: { from: string; to: string }) => void;
 
   // Screen sharing events
   'screen:start': (data: { peerId: string }) => void;
@@ -66,6 +78,9 @@ export interface ServerToClientEvents {
   // Camera events
   'camera:start': (data: { peerId: string }) => void;
   'camera:stop': (data: { peerId: string }) => void;
+
+  // Chat events (100% In-Memory)
+  'chat:message': (message: ChatMessage) => void;
 }
 
 // ============================================================
@@ -82,12 +97,15 @@ export interface ClientToServerEvents {
   // Participant events
   'participant:muted': () => void;
   'participant:unmuted': () => void;
+  'participant:deafened': () => void;
+  'participant:undeafened': () => void;
   'participant:speaking': (data: { isSpeaking: boolean }) => void;
 
   // Voice signaling events
   'voice:offer': (data: VoiceOffer) => void;
   'voice:answer': (data: VoiceAnswer) => void;
   'voice:ice-candidate': (data: VoiceIceCandidate) => void;
+  'voice:reconnect-request': (data: { to: string }) => void;
 
   // Screen sharing events
   'screen:start': () => void;
@@ -96,21 +114,23 @@ export interface ClientToServerEvents {
   // Camera events
   'camera:start': () => void;
   'camera:stop': () => void;
+
+  // Chat events
+  'chat:send': (data: { text: string }) => void;
 }
 
 // ============================================================
-// Inter-Server Events
+// Inter-Server Events (empty for single-server setup)
 // ============================================================
-export interface InterServerEvents {
-  ping: () => void;
-}
+export type InterServerEvents = Record<string, never>;
 
 // ============================================================
-// Socket Data
+// Socket Data (attached to each Socket instance)
 // ============================================================
 export interface SocketData {
   userId: string;
   nickname: string;
   roomCode: string;
   isMuted: boolean;
+  isDeafened?: boolean;
 }

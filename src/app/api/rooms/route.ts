@@ -1,14 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-
-function generateRoomCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let code = '';
-  for (let i = 0; i < 7; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
+import { roomStore } from '@/server/room-store';
 
 export async function POST(req: Request) {
   try {
@@ -29,19 +20,7 @@ export async function POST(req: Request) {
       );
     }
 
-    let code = generateRoomCode();
-    let existing = await prisma.room.findUnique({ where: { code } });
-    while (existing) {
-      code = generateRoomCode();
-      existing = await prisma.room.findUnique({ where: { code } });
-    }
-
-    const room = await prisma.room.create({
-      data: {
-        code,
-        name,
-      },
-    });
+    const room = roomStore.createRoom(name);
 
     return NextResponse.json({
       success: true,
@@ -55,7 +34,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('[API /api/rooms] Error:', error);
     return NextResponse.json(
-      { success: false, error: 'Falha ao criar a sala no banco' },
+      { success: false, error: 'Falha ao criar a sala' },
       { status: 500 }
     );
   }

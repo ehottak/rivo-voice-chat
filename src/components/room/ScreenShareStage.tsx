@@ -6,6 +6,7 @@ interface ScreenShareStageProps {
   stream: MediaStream;
   muted: boolean;
   label: string;
+  isFocused?: boolean;
 }
 
 /**
@@ -19,6 +20,7 @@ export const ScreenShareStage = memo(function ScreenShareStage({
   stream,
   muted: initialMuted,
   label,
+  isFocused = false,
 }: ScreenShareStageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -110,10 +112,14 @@ export const ScreenShareStage = memo(function ScreenShareStage({
         onTouchStart={handleInteraction}
         onMouseLeave={() => setShowControls(false)}
         onDoubleClick={toggleFullscreen}
-        className={`w-full relative rounded-3xl overflow-hidden border border-violet-500/25 bg-[#08080f] shadow-2xl shadow-violet-950/40 group select-none transition-all duration-300 ${
+        className={`w-full relative rounded-3xl overflow-hidden border bg-[#08080f] shadow-2xl group select-none transition-all duration-300 ${
+          isFocused ? 'border-violet-500/40 shadow-violet-950/50' : 'border-white/[0.08]'
+        } ${
           isFullscreen
             ? 'h-screen max-h-screen rounded-none border-none aspect-auto flex items-center justify-center'
-            : 'aspect-video max-h-[38vh] sm:max-h-[58vh]'
+            : isFocused
+            ? 'aspect-video max-h-[52vh] sm:max-h-[64vh]'
+            : 'aspect-video max-h-[35vh] sm:max-h-[48vh]'
         }`}
       >
         <video
@@ -137,11 +143,11 @@ export const ScreenShareStage = memo(function ScreenShareStage({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
           </span>
-          <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[130px] sm:max-w-xs">
+          <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[140px] sm:max-w-xs">
             {label}
           </span>
           <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-sm shadow-violet-600/30 tracking-wider">
-            LIVE
+            AO VIVO
           </span>
         </div>
 

@@ -5,8 +5,9 @@ import type {
   InterServerEvents,
   SocketData,
   ParticipantInfo,
+  ChatMessage,
 } from '../../types/socket-events';
-import { prisma } from '../../lib/prisma';
+import { roomStore } from '../room-store';
 
 type TypedServer = Server<
   ClientToServerEvents,
@@ -32,15 +33,10 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket): void
         return;
       }
 
-      // Verify room exists in database
-      const room = await prisma.room.findUnique({
-        where: { code: data.roomCode },
-      });
-
+      // Get or auto-register room in in-memory roomStore (Zero DB & Resilient)
+      let room = roomStore.getRoom(data.roomCode);
       if (!room) {
-        console.warn(`[Socket ${socket.id}] ❌ Room '${data.roomCode}' not found in database`);
-        callback({ success: false, error: 'Sala não encontrada ou já expirou' });
-        return;
+        room = roomStore.createRoomWithCode(data.roomCode, 'Sala de Voz');
       }
 
       // Ephemeral User ID based on socket ID (Zero DB Pollution!)
@@ -77,7 +73,7 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket): void
       };
       socket.to(data.roomCode).emit('participant:joined', newParticipant);
 
-      console.log(`[Socket ${socket.id}] ✅ Joined room '${data.roomCode}' as '${data.nickname}' (RAM only, 0 DB writes). Online: ${participants.length + 1}`);
+      console.log(`[Socket ${socket.id}] ✅ Joined room '${data.roomCode}' as '${data.nickname}' (In-Memory). Online: ${participants.length + 1}`);
 
       callback({
         success: true,
@@ -88,6 +84,26 @@ export function registerRoomHandlers(io: TypedServer, socket: TypedSocket): void
       console.error(`[Socket ${socket.id}] ❌ Error during room:join:`, error);
       callback({ success: false, error: 'Erro interno ao entrar na sala' });
     }
+  });
+
+  // Real-Time In-Memory Ephemeral Chat
+  socket.on('chat:send', (data) => {
+    const text = data?.text?.trim();
+    const roomCode = socket.data.roomCode;
+    const nickname = socket.data.nickname || 'Anônimo';
+
+    if (!text || !roomCode || text.length > 2000) return;
+
+    const message: ChatMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      peerId: socket.id,
+      nickname,
+      text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    console.log(`[Chat ${roomCode}] 💬 ${nickname}: ${text.slice(0, 30)}`);
+    io.in(roomCode).emit('chat:message', message);
   });
 
   socket.on('room:leave', async () => {
@@ -122,26 +138,8 @@ async function handleLeaveRoom(io: TypedServer, socket: TypedSocket): Promise<vo
     const remainingSockets = await io.in(roomCode).fetchSockets();
 
     if (remainingSockets.length === 0) {
-      console.log(`[Auto-Cleanup] 🧹 Sala '${roomCode}' ficou vazia (0 pessoas). Deletando do banco...`);
-
-      // Delete room and any residual records from the database immediately
-      try {
-        const room = await prisma.room.findUnique({
-          where: { code: roomCode },
-        });
-
-        if (room) {
-          await prisma.roomParticipant.deleteMany({
-            where: { roomId: room.id },
-          });
-          await prisma.room.delete({
-            where: { id: room.id },
-          });
-          console.log(`[Auto-Cleanup] ✅ Sala '${roomCode}' deletada com sucesso do banco de dados.`);
-        }
-      } catch (dbErr) {
-        console.warn(`[Auto-Cleanup] Aviso ao deletar sala vazia '${roomCode}':`, dbErr);
-      }
+      console.log(`[Auto-Cleanup] 🧹 Sala '${roomCode}' ficou vazia (0 pessoas). Removendo da memória...`);
+      roomStore.deleteRoom(roomCode);
     } else {
       console.log(`[Room '${roomCode}'] Restam ${remainingSockets.length} participante(s) online.`);
     }

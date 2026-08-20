@@ -158,9 +158,15 @@ export function ParticipantCard({ participant, isLocal, videoStream }: Participa
           )}
         </div>
 
-        {/* Mute indicator badge */}
-        {isMuted ? (
-          <div className="absolute -bottom-1 -right-1 z-20 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center border-2 border-[#11111a] shadow-lg">
+        {/* Deafen / Mute indicator badge */}
+        {participant.isDeafened ? (
+          <div className="absolute -bottom-1 -right-1 z-20 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center border-2 border-[#11111a] shadow-lg" title="Ensurdecido (Não está ouvindo)">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white">
+              <path d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM19.46 16.278A9.012 9.012 0 0021 11.25a9 9 0 00-14.774-6.91l1.107 1.107A7.502 7.502 0 0119.5 11.25c0 1.258-.31 2.443-.855 3.486l.815.815v-.023a2.25 2.25 0 011.79 2.202v.04l-1.79-1.492zM7.054 8.114A7.478 7.478 0 004.5 11.25v2.25a2.25 2.25 0 002.25 2.25h.75a2.25 2.25 0 002.25-2.25v-2.25A2.25 2.25 0 007.5 9h-.446z" />
+            </svg>
+          </div>
+        ) : isMuted ? (
+          <div className="absolute -bottom-1 -right-1 z-20 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center border-2 border-[#11111a] shadow-lg" title="Microfone Mutado">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"

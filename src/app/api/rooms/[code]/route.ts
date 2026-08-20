@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { roomStore } from '@/server/room-store';
 
 interface RouteContext {
   params: Promise<{ code: string }>;
@@ -16,9 +16,12 @@ export async function GET(req: Request, { params }: RouteContext) {
       );
     }
 
-    const room = await prisma.room.findUnique({
-      where: { code },
-    });
+    let room = roomStore.getRoom(code);
+
+    // If room code is valid, auto-register room in memory
+    if (!room && code.trim().length >= 3) {
+      room = roomStore.createRoomWithCode(code.trim(), 'Sala de Voz');
+    }
 
     if (!room) {
       return NextResponse.json(

@@ -41,10 +41,18 @@ export function registerVoiceHandlers(io: TypedServer, socket: TypedSocket): voi
 
   // Relay ICE candidate to specific peer
   socket.on('voice:ice-candidate', (data) => {
-    console.log(`[WebRTC Signaling] ❄️ Relaying ICE candidate from ${socket.id} to ${data.to}`);
     io.to(data.to).emit('voice:ice-candidate', {
       ...data,
       from: socket.id,
+    });
+  });
+
+  // Relay WebRTC Reconnect Request
+  socket.on('voice:reconnect-request', (data) => {
+    console.log(`[WebRTC Signaling] 🔄 Relaying reconnect request from ${socket.id} to ${data.to}`);
+    io.to(data.to).emit('voice:reconnect-request', {
+      from: socket.id,
+      to: data.to,
     });
   });
 
@@ -73,6 +81,31 @@ export function registerVoiceHandlers(io: TypedServer, socket: TypedSocket): voi
     }
   });
 
+  // Broadcast deafen/undeafen state
+  socket.on('participant:deafened', () => {
+    socket.data.isDeafened = true;
+    const roomCode = socket.data.roomCode;
+    if (roomCode) {
+      socket.to(roomCode).emit('participant:deafened', { peerId: socket.id });
+    } else {
+      socket.rooms.forEach((room) => {
+        if (room !== socket.id) socket.to(room).emit('participant:deafened', { peerId: socket.id });
+      });
+    }
+  });
+
+  socket.on('participant:undeafened', () => {
+    socket.data.isDeafened = false;
+    const roomCode = socket.data.roomCode;
+    if (roomCode) {
+      socket.to(roomCode).emit('participant:undeafened', { peerId: socket.id });
+    } else {
+      socket.rooms.forEach((room) => {
+        if (room !== socket.id) socket.to(room).emit('participant:undeafened', { peerId: socket.id });
+      });
+    }
+  });
+
   // Broadcast speaking state
   socket.on('participant:speaking', (data) => {
     const roomCode = socket.data.roomCode;
@@ -93,53 +126,37 @@ export function registerVoiceHandlers(io: TypedServer, socket: TypedSocket): voi
     }
   });
 
-  // Broadcast screen sharing events
+  // Screen sharing events
   socket.on('screen:start', () => {
     const roomCode = socket.data.roomCode;
-    console.log(`[Screen Share] 🖥️ Peer ${socket.id} started screen sharing in room ${roomCode}`);
     if (roomCode) {
+      console.log(`[Screen Share] 🖥️ Peer ${socket.id} started screen sharing in room ${roomCode}`);
       socket.to(roomCode).emit('screen:start', { peerId: socket.id });
-    } else {
-      socket.rooms.forEach((room) => {
-        if (room !== socket.id) socket.to(room).emit('screen:start', { peerId: socket.id });
-      });
     }
   });
 
   socket.on('screen:stop', () => {
     const roomCode = socket.data.roomCode;
-    console.log(`[Screen Share] 🛑 Peer ${socket.id} stopped screen sharing in room ${roomCode}`);
     if (roomCode) {
+      console.log(`[Screen Share] ⏹️ Peer ${socket.id} stopped screen sharing in room ${roomCode}`);
       socket.to(roomCode).emit('screen:stop', { peerId: socket.id });
-    } else {
-      socket.rooms.forEach((room) => {
-        if (room !== socket.id) socket.to(room).emit('screen:stop', { peerId: socket.id });
-      });
     }
   });
 
-  // Broadcast camera events
+  // Camera events
   socket.on('camera:start', () => {
     const roomCode = socket.data.roomCode;
-    console.log(`[Camera] 📹 Peer ${socket.id} turned on camera in room ${roomCode}`);
     if (roomCode) {
+      console.log(`[Camera] 📹 Peer ${socket.id} started camera in room ${roomCode}`);
       socket.to(roomCode).emit('camera:start', { peerId: socket.id });
-    } else {
-      socket.rooms.forEach((room) => {
-        if (room !== socket.id) socket.to(room).emit('camera:start', { peerId: socket.id });
-      });
     }
   });
 
   socket.on('camera:stop', () => {
     const roomCode = socket.data.roomCode;
-    console.log(`[Camera] 🛑 Peer ${socket.id} turned off camera in room ${roomCode}`);
     if (roomCode) {
+      console.log(`[Camera] ⏹️ Peer ${socket.id} stopped camera in room ${roomCode}`);
       socket.to(roomCode).emit('camera:stop', { peerId: socket.id });
-    } else {
-      socket.rooms.forEach((room) => {
-        if (room !== socket.id) socket.to(room).emit('camera:stop', { peerId: socket.id });
-      });
     }
   });
 }
