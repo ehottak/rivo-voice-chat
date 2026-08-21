@@ -440,18 +440,23 @@ export function useWebRTC({ localStream, onSpeakingChange }: UseWebRTCProps) {
       pc.ontrack = (event) => {
         console.log(`[WebRTC] ✅ Track received from ${peerId}: kind=${event.track.kind}`);
 
+        const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+
         if (event.track.kind === 'video') {
-          const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
           setRemoteScreenStreams((prev) => ({ ...prev, [peerId]: stream }));
           return;
         }
 
-        if (event.streams && event.streams[0]) {
-          playRemoteAudio(peerId, event.streams[0]);
-        } else {
-          const fallbackStream = new MediaStream([event.track]);
-          playRemoteAudio(peerId, fallbackStream);
+        // Se a trilha de áudio pertencer a uma stream que possui vídeo (compartilhamento de tela),
+        // NÃO enviamos para o playRemoteAudio global. Isso permite que o slider de volume
+        // na UI (ScreenShareStage) controle o áudio corretamente e evita que o microfone seja silenciado.
+        if (stream.getVideoTracks().length > 0) {
+          console.log(`[WebRTC] 🔇 Direcionando áudio da tela para o player local (${peerId})`);
+          return;
         }
+
+        // Caso contrário, é o microfone principal
+        playRemoteAudio(peerId, stream);
       };
 
       // Handle ICE candidates
